@@ -13,6 +13,7 @@ pub mod vpn;
 pub mod tools;
 pub mod security;
 pub mod media;
+pub mod setup;
 
 use axum::{
     extract::FromRequestParts,

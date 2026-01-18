@@ -51,6 +51,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "/opt/routerui/frontend/build".to_string());
 
     let app = Router::new()
+        // Setup wizard routes (no auth required)
+        .route("/api/setup/status", get(api::setup::status))
+        .route("/api/setup/interfaces", get(api::setup::get_interfaces))
+        .route("/api/setup/features", get(api::setup::get_features))
+        .route("/api/setup/admin", post(api::setup::create_admin))
+        .route("/api/setup/network", post(api::setup::save_network_config))
+        .route("/api/setup/features/save", post(api::setup::save_features))
+        .route("/api/setup/features/install", post(api::setup::install_feature))
+        .route("/api/setup/complete", post(api::setup::complete))
         // Auth routes
         .route("/api/auth/login", post(api::auth::login))
         .route("/api/auth/logout", post(api::auth::logout))
