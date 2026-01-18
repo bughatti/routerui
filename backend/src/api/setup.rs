@@ -462,10 +462,20 @@ pub async fn save_features(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Get features to install
-    let to_install: Vec<String> = payload.features.iter()
+    let mut to_install: Vec<String> = payload.features.iter()
         .filter(|f| f.install)
         .map(|f| f.id.clone())
         .collect();
+
+    // Docker-dependent features - if any are selected, ensure Docker is installed first
+    let docker_dependent = ["gluetun", "radarr", "sonarr", "jellyfin", "transmission"];
+    let needs_docker = to_install.iter().any(|f| docker_dependent.contains(&f.as_str()));
+    let docker_installed = detect_command_exists("docker");
+
+    if needs_docker && !docker_installed && !to_install.contains(&"docker".to_string()) {
+        // Insert Docker at the beginning so it installs first
+        to_install.insert(0, "docker".to_string());
+    }
 
     Ok(Json(serde_json::json!({
         "success": true,
@@ -488,6 +498,11 @@ pub async fn install_feature(
         "adguard" => install_adguard().await,
         "dnsmasq" => install_dnsmasq().await,
         "clamav" => install_clamav().await,
+        "gluetun" => install_gluetun().await,
+        "radarr" => install_radarr().await,
+        "sonarr" => install_sonarr().await,
+        "jellyfin" => install_jellyfin().await,
+        "transmission" => install_transmission().await,
         _ => Err(format!("Unknown feature: {}", feature_id)),
     };
 
@@ -596,6 +611,138 @@ async fn install_clamav() -> Result<String, String> {
 
     if output.status.success() {
         Ok("ClamAV installed successfully".to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+async fn install_gluetun() -> Result<String, String> {
+    let output = Command::new("bash")
+        .args(["-c", r#"
+            docker pull qmcgaw/gluetun:latest && \
+            docker run -d \
+                --name=gluetun \
+                --cap-add=NET_ADMIN \
+                --device /dev/net/tun:/dev/net/tun \
+                -e VPN_SERVICE_PROVIDER=nordvpn \
+                -e VPN_TYPE=openvpn \
+                -p 8888:8888/tcp \
+                -p 8388:8388/tcp \
+                -p 8388:8388/udp \
+                --restart=unless-stopped \
+                qmcgaw/gluetun
+        "#])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok("Gluetun installed. Configure VPN credentials in container settings.".to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+async fn install_radarr() -> Result<String, String> {
+    let output = Command::new("bash")
+        .args(["-c", r#"
+            docker pull lscr.io/linuxserver/radarr:latest && \
+            docker run -d \
+                --name=radarr \
+                -e PUID=1000 \
+                -e PGID=1000 \
+                -e TZ=America/Denver \
+                -p 7878:7878 \
+                -v /opt/routerui/config/radarr:/config \
+                -v /media/movies:/movies \
+                -v /media/downloads:/downloads \
+                --restart=unless-stopped \
+                lscr.io/linuxserver/radarr:latest
+        "#])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok("Radarr installed. Access at http://localhost:7878".to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+async fn install_sonarr() -> Result<String, String> {
+    let output = Command::new("bash")
+        .args(["-c", r#"
+            docker pull lscr.io/linuxserver/sonarr:latest && \
+            docker run -d \
+                --name=sonarr \
+                -e PUID=1000 \
+                -e PGID=1000 \
+                -e TZ=America/Denver \
+                -p 8989:8989 \
+                -v /opt/routerui/config/sonarr:/config \
+                -v /media/tv:/tv \
+                -v /media/downloads:/downloads \
+                --restart=unless-stopped \
+                lscr.io/linuxserver/sonarr:latest
+        "#])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok("Sonarr installed. Access at http://localhost:8989".to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+async fn install_jellyfin() -> Result<String, String> {
+    let output = Command::new("bash")
+        .args(["-c", r#"
+            docker pull lscr.io/linuxserver/jellyfin:latest && \
+            docker run -d \
+                --name=jellyfin \
+                -e PUID=1000 \
+                -e PGID=1000 \
+                -e TZ=America/Denver \
+                -p 8096:8096 \
+                -v /opt/routerui/config/jellyfin:/config \
+                -v /media/tv:/data/tvshows \
+                -v /media/movies:/data/movies \
+                --restart=unless-stopped \
+                lscr.io/linuxserver/jellyfin:latest
+        "#])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok("Jellyfin installed. Access at http://localhost:8096".to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+async fn install_transmission() -> Result<String, String> {
+    let output = Command::new("bash")
+        .args(["-c", r#"
+            docker pull lscr.io/linuxserver/transmission:latest && \
+            docker run -d \
+                --name=transmission \
+                -e PUID=1000 \
+                -e PGID=1000 \
+                -e TZ=America/Denver \
+                -p 9091:9091 \
+                -p 51413:51413 \
+                -p 51413:51413/udp \
+                -v /opt/routerui/config/transmission:/config \
+                -v /media/downloads:/downloads \
+                -v /media/watch:/watch \
+                --restart=unless-stopped \
+                lscr.io/linuxserver/transmission:latest
+        "#])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if output.status.success() {
+        Ok("Transmission installed. Access at http://localhost:9091".to_string())
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }

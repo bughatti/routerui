@@ -465,15 +465,20 @@
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {#each categoryFeatures as feature}
+                    {@const needsDocker = feature.install_method === "docker" && !feature.can_install}
+                    {@const dockerFeature = features.find(f => f.id === "docker")}
+                    {@const dockerInstalled = dockerFeature?.is_installed}
                     <div class="bg-gray-700/50 rounded-lg p-4">
                       <div class="flex items-start justify-between">
                         <div class="flex-1">
-                          <div class="flex items-center gap-2">
+                          <div class="flex items-center gap-2 flex-wrap">
                             <span class="font-medium">{feature.name}</span>
                             {#if feature.is_installed}
                               <span class="text-xs bg-green-600/30 text-green-400 px-2 rounded">Installed</span>
                             {:else if feature.can_install}
                               <span class="text-xs bg-yellow-600/30 text-yellow-400 px-2 rounded">Not Installed</span>
+                            {:else if needsDocker}
+                              <span class="text-xs bg-blue-600/30 text-blue-400 px-2 rounded">Requires Docker</span>
                             {:else}
                               <span class="text-xs bg-gray-600/30 text-gray-400 px-2 rounded">Requires {feature.install_method}</span>
                             {/if}
@@ -481,6 +486,9 @@
                           <p class="text-xs text-gray-400 mt-1">{feature.description}</p>
                           {#if feature.is_running}
                             <p class="text-xs text-green-400 mt-1">● Running</p>
+                          {/if}
+                          {#if needsDocker && !dockerInstalled}
+                            <p class="text-xs text-blue-400 mt-1">Docker will be installed automatically</p>
                           {/if}
                         </div>
                         <div class="flex flex-col gap-2 ml-4">
@@ -493,7 +501,7 @@
                             />
                             <span>Enable</span>
                           </label>
-                          {#if !feature.is_installed && feature.can_install}
+                          {#if !feature.is_installed}
                             <label class="flex items-center gap-2 text-sm cursor-pointer">
                               <input
                                 type="checkbox"
