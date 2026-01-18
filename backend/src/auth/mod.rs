@@ -109,19 +109,52 @@ pub async fn validate_session(pool: &SqlitePool, token: &str) -> Result<Option<U
 }
 
 pub async fn create_default_admin(pool: &SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+    // First check if setup wizard has completed
+    // If setup_config table exists and has setup_complete = true, we can create fallback admin
+    // Otherwise, let the setup wizard create the admin account
+
+    let setup_complete = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='setup_config'"
+    )
+        .fetch_one(pool)
+        .await
+        .map(|c| c > 0)
+        .unwrap_or(false);
+
+    if !setup_complete {
+        // Setup wizard hasn't run yet, don't create default admin
+        tracing::info!("Setup not complete - skipping default admin creation");
+        return Ok(());
+    }
+
+    // Check if setup was marked complete
+    let is_setup_done = sqlx::query_scalar::<_, String>(
+        "SELECT value FROM setup_config WHERE key = 'setup_complete'"
+    )
+        .fetch_optional(pool)
+        .await?
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    if !is_setup_done {
+        tracing::info!("Setup wizard in progress - skipping default admin creation");
+        return Ok(());
+    }
+
+    // Setup is complete, check if we need a fallback admin
     let count = crate::db::count_users(pool).await?;
-    
+
     if count == 0 {
-        let password_hash = hash_password("myV!ct0r@2014!!")
+        let password_hash = hash_password("admin")
             .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
         sqlx::query("INSERT INTO users (username, password_hash, role, enabled) VALUES (?, ?, 'admin', 1)")
-            .bind("claudeadmin")
+            .bind("admin")
             .bind(&password_hash)
             .execute(pool)
             .await?;
-        
-        tracing::info!("Created default admin user: claudeadmin");
+
+        tracing::info!("Created fallback admin user: admin/admin");
     }
-    
+
     Ok(())
 }

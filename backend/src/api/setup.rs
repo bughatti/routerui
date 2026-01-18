@@ -127,15 +127,7 @@ fn detect_port_listening(port: u16) -> bool {
 pub async fn status(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<SetupStatus>, (StatusCode, String)> {
-    // Check if setup is complete by looking for admin user
-    let result = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE role = 'admin'")
-        .fetch_one(&state.db)
-        .await
-        .unwrap_or(0);
-
-    let is_complete = result > 0;
-
-    // Also check for setup_config table
+    // Check for setup_config table
     let config_exists = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='setup_config'"
     )
@@ -143,18 +135,27 @@ pub async fn status(
         .await
         .unwrap_or(0) > 0;
 
-    let setup_complete = if config_exists {
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM setup_config WHERE key = 'setup_complete' AND value = 'true'")
-            .fetch_one(&state.db)
-            .await
-            .unwrap_or(0) > 0
-    } else {
-        false
-    };
+    if !config_exists {
+        return Ok(Json(SetupStatus {
+            is_complete: false,
+            current_step: 1,
+            total_steps: 5,
+        }));
+    }
+
+    // Check if setup_complete flag is set
+    let setup_complete = sqlx::query_scalar::<_, String>(
+        "SELECT value FROM setup_config WHERE key = 'setup_complete'"
+    )
+        .fetch_optional(&state.db)
+        .await
+        .unwrap_or(None)
+        .map(|v| v == "true")
+        .unwrap_or(false);
 
     Ok(Json(SetupStatus {
-        is_complete: is_complete && setup_complete,
-        current_step: if is_complete { 5 } else { 1 },
+        is_complete: setup_complete,
+        current_step: if setup_complete { 5 } else { 1 },
         total_steps: 5,
     }))
 }
