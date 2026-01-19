@@ -186,6 +186,7 @@ if [ "$BUILD_FROM_SOURCE" = true ]; then
     cd $ROUTERUI_DIR/backend
     cargo build --release 2>/dev/null
     cp target/release/routerui-api $ROUTERUI_DIR/
+    chmod +x $ROUTERUI_DIR/routerui-api
 
     # Build frontend
     echo "Building frontend..."
