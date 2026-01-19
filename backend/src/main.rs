@@ -58,6 +58,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/setup/configure-router", post(api::setup::configure_router))
         .route("/api/setup/network", post(api::setup::save_network_config))
         .route("/api/setup/complete", post(api::setup::complete))
+        // Addons
+        .route("/api/addons/status", get(api::addons::status))
+        .route("/api/addons/list", get(api::addons::list))
+        .route("/api/addons/install", post(api::addons::install))
         // Auth routes
         .route("/api/auth/login", post(api::auth::login))
         .route("/api/auth/logout", post(api::auth::logout))

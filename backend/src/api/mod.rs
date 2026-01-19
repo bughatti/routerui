@@ -1,3 +1,4 @@
+pub mod addons;
 pub mod auth;
 pub mod firewall;
 pub mod protection;
