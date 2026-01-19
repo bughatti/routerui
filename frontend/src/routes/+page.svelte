@@ -12,13 +12,30 @@
   let prevNetStats = $state(null);
   let netSpeed = $state({ rxMbps: 0, txMbps: 0 });
 
+  let addonsStatus = $state({});
+
   async function fetchData() {
     try {
-      const [dashRes, adRes, trafficRes] = await Promise.all([
+      // First fetch addons status to know what's installed
+      const addonsRes = await fetch("/api/addons/status");
+      if (addonsRes.ok) {
+        addonsStatus = await addonsRes.json();
+      }
+
+      // Build list of fetches - only include adguard if installed
+      const fetches = [
         fetch("/api/dashboard"),
-        fetch("/api/adguard/overview"),
         fetch("/api/tools/traffic")
-      ]);
+      ];
+
+      const adguardInstalled = addonsStatus.adguard?.installed;
+      if (adguardInstalled) {
+        fetches.push(fetch("/api/adguard/overview"));
+      }
+
+      const results = await Promise.all(fetches);
+      const [dashRes, trafficRes] = results;
+      const adRes = adguardInstalled ? results[2] : null;
 
       if (!dashRes.ok) throw new Error("Failed to fetch dashboard");
       const newDashboard = await dashRes.json();
@@ -47,7 +64,7 @@
 
       dashboard = newDashboard;
 
-      if (adRes.ok) {
+      if (adRes?.ok) {
         adguard = await adRes.json();
       }
 

@@ -12,7 +12,11 @@ const ADGUARD_USER: &str = "admin";
 const ADGUARD_PASS: &str = "routerui123";
 
 fn client() -> reqwest::Client {
-    reqwest::Client::new()
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .connect_timeout(std::time::Duration::from_secs(2))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 #[derive(Serialize)]
