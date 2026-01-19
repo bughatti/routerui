@@ -1,13 +1,13 @@
 #!/bin/bash
 # RouterUI Install Script
-# Usage: curl -sSL https://raw.githubusercontent.com/USER/routerui/main/install.sh | sudo bash
+# Usage: curl -sSL https://raw.githubusercontent.com/whimtrav/routerui/main/install.sh | sudo bash
 
 set -e
 
 # Configuration
 ROUTERUI_VERSION="${ROUTERUI_VERSION:-latest}"
 ROUTERUI_DIR="/opt/routerui"
-GITHUB_REPO="USER/routerui"  # Change this to actual repo
+GITHUB_REPO="whimtrav/routerui"  # Change this to actual repo
 
 # Colors for output
 RED='\033[0;31m'
