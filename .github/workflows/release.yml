@@ -1,0 +1,155 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+
+jobs:
+  build-backend:
+    name: Build Backend (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: routerui-api-linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: routerui-api-linux-aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        run: |
+          cd backend
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        run: |
+          cp backend/target/${{ matrix.target }}/release/routerui-api ${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Create tarball
+        run: |
+          cd frontend
+          tar -czvf ../routerui-frontend.tar.gz build/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: routerui-frontend
+          path: routerui-frontend.tar.gz
+
+  release:
+    name: Create Release
+    needs: [build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          cp artifacts/routerui-api-linux-x86_64/routerui-api-linux-x86_64 release/
+          cp artifacts/routerui-api-linux-aarch64/routerui-api-linux-aarch64 release/
+          cp artifacts/routerui-frontend/routerui-frontend.tar.gz release/
+          chmod +x release/routerui-api-*
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: RouterUI ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            release/routerui-api-linux-x86_64
+            release/routerui-api-linux-aarch64
+            release/routerui-frontend.tar.gz
+            install.sh
+          body: |
+            ## Installation
+
+            ```bash
+            curl -sSL https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/install.sh | sudo bash
+            ```
+
+            Or download and run manually:
+            ```bash
+            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/install.sh
+            sudo bash install.sh
+            ```
+
+            ## What's Included
+            - `routerui-api-linux-x86_64` - Backend binary for x86_64
+            - `routerui-api-linux-aarch64` - Backend binary for ARM64
+            - `routerui-frontend.tar.gz` - Pre-built frontend
+            - `install.sh` - Installation script

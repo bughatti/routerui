@@ -54,11 +54,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Setup wizard routes (no auth required)
         .route("/api/setup/status", get(api::setup::status))
         .route("/api/setup/interfaces", get(api::setup::get_interfaces))
-        .route("/api/setup/core-services", get(api::setup::get_core_services))
-        .route("/api/setup/core-services/install", post(api::setup::install_core_service))
-        .route("/api/setup/features", get(api::setup::get_features))
-        .route("/api/setup/features/install", post(api::setup::install_feature))
         .route("/api/setup/admin", post(api::setup::create_admin))
+        .route("/api/setup/configure-router", post(api::setup::configure_router))
         .route("/api/setup/network", post(api::setup::save_network_config))
         .route("/api/setup/complete", post(api::setup::complete))
         // Auth routes
