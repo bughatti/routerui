@@ -1,6 +1,5 @@
 <script>
   import '../app.css';
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
 
@@ -8,6 +7,7 @@
   let setupChecked = $state(false);
   let isSetupRoute = $derived($page.url.pathname.startsWith('/setup'));
   let installedAddons = $state({});
+  let hasCheckedSetup = $state(false);
 
   // Core navigation - always visible
   const coreNavItems = [
@@ -35,13 +35,25 @@
     optionalNavItems.filter(item => installedAddons[item.addonId]?.installed)
   );
 
-  onMount(async () => {
-    // Skip check if already on setup page
+  // Effect to check setup status and fetch addons when route changes
+  $effect(() => {
+    // On setup routes, just mark as checked
     if (isSetupRoute) {
       setupChecked = true;
       return;
     }
 
+    // Not on setup route - need to verify setup and load addons
+    if (!hasCheckedSetup) {
+      hasCheckedSetup = true;
+      checkSetupAndLoadAddons();
+    } else {
+      // Already checked, just mark as ready
+      setupChecked = true;
+    }
+  });
+
+  async function checkSetupAndLoadAddons() {
     try {
       const res = await fetch('/api/setup/status');
       if (res.ok) {
@@ -66,7 +78,7 @@
     }
 
     setupChecked = true;
-  });
+  }
 </script>
 
 {#if !setupChecked && !isSetupRoute}
