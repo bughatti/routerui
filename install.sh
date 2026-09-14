@@ -165,6 +165,19 @@ if [ "$BUILD_FROM_SOURCE" = true ]; then
         SCRIPT_DIR="/tmp/routerui-build"
     fi
 
+    # A clean server has no C toolchain, and the Rust build needs one (plus
+    # cmake for the TLS library). Without these the build fails at once.
+    echo "Installing build tools..."
+    apt-get install -y -qq build-essential pkg-config cmake > /dev/null 2>&1
+
+    BUILD_LOG=/var/log/routerui-build.log
+    : > "$BUILD_LOG"
+    build_failed() {
+        echo -e "${RED}Error: $1 failed. Last lines of $BUILD_LOG:${NC}"
+        tail -n 30 "$BUILD_LOG"
+        exit 1
+    }
+
     # Install Rust if needed
     if ! command -v cargo &> /dev/null; then
         echo "Installing Rust..."
@@ -184,7 +197,7 @@ if [ "$BUILD_FROM_SOURCE" = true ]; then
     echo "Building backend (this takes a few minutes)..."
     cp -r "$SCRIPT_DIR/backend/"* $ROUTERUI_DIR/backend/ 2>/dev/null || mkdir -p $ROUTERUI_DIR/backend && cp -r "$SCRIPT_DIR/backend/"* $ROUTERUI_DIR/backend/
     cd $ROUTERUI_DIR/backend
-    cargo build --release 2>/dev/null
+    cargo build --release >> "$BUILD_LOG" 2>&1 || build_failed "Backend build"
     cp target/release/routerui-api $ROUTERUI_DIR/
     chmod +x $ROUTERUI_DIR/routerui-api
 
@@ -192,8 +205,8 @@ if [ "$BUILD_FROM_SOURCE" = true ]; then
     echo "Building frontend..."
     cp -r "$SCRIPT_DIR/frontend/"* $ROUTERUI_DIR/frontend/ 2>/dev/null || true
     cd $ROUTERUI_DIR/frontend
-    npm install --silent 2>/dev/null
-    npm run build --silent 2>/dev/null
+    npm install >> "$BUILD_LOG" 2>&1 || build_failed "Frontend dependency install"
+    npm run build >> "$BUILD_LOG" 2>&1 || build_failed "Frontend build"
     mkdir -p $ROUTERUI_DIR/frontend/build
     cp -r dist/* $ROUTERUI_DIR/frontend/build/ 2>/dev/null || cp -r build/* $ROUTERUI_DIR/frontend/build/ 2>/dev/null || true
 
