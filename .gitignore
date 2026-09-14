@@ -32,3 +32,6 @@ Thumbs.db
 *.dll
 *.so
 *.dylib
+
+# SvelteKit generated output (rebuilt on every build)
+frontend/.svelte-kit/
