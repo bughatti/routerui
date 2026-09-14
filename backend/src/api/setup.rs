@@ -215,6 +215,13 @@ pub async fn configure_router(
     }
 
     // Step 4: Configure dnsmasq
+    let fw_result = configure_firewall(wan, lan);
+    steps.push(ConfigStep {
+        name: "Enable basic firewall".to_string(),
+        success: fw_result.is_ok(),
+        error: fw_result.err(),
+    });
+
     let dnsmasq_result = configure_dnsmasq(lan);
     steps.push(ConfigStep {
         name: "Configure DHCP/DNS (dnsmasq)".to_string(),
@@ -433,16 +440,40 @@ fn configure_nat(wan_interface: &str) -> Result<(), String> {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
-    // Allow forwarding
-    Command::new("iptables")
-        .args(["-A", "FORWARD", "-i", wan_interface, "-o", wan_interface, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"])
-        .output()
-        .ok();
+    // Forwarding rules and the default policy are set by configure_firewall,
+    // so the router does not leave FORWARD wide open.
+    Ok(())
+}
 
-    Command::new("iptables")
-        .args(["-A", "FORWARD", "-j", "ACCEPT"])
-        .output()
-        .ok();
+// configure_firewall installs a basic stateful router firewall so a fresh
+// install is protected out of the box:
+//   - the router only accepts inbound from the LAN, loopback, and replies to
+//     traffic it started; the WAN cannot reach the router's own services;
+//   - forwarded traffic is allowed LAN->WAN and for replies coming back, but
+//     unsolicited WAN->LAN is dropped (port forwards and the DMZ add their own
+//     allow rules, so they keep working);
+//   - ICMP echo and the router's own DHCP client on the WAN stay allowed.
+// Setup is performed from the LAN, so enabling this does not lock the operator
+// out; WAN-side management is blocked by design.
+fn configure_firewall(wan_interface: &str, lan_interface: &str) -> Result<(), String> {
+    let ipt = |args: &[&str]| {
+        let _ = Command::new("iptables").args(args).output();
+    };
+
+    // INPUT: protect the router itself.
+    ipt(&["-A", "INPUT", "-i", "lo", "-j", "ACCEPT"]);
+    ipt(&["-A", "INPUT", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"]);
+    ipt(&["-A", "INPUT", "-i", lan_interface, "-j", "ACCEPT"]);
+    // The router's own DHCP client, so it keeps its WAN lease.
+    ipt(&["-A", "INPUT", "-i", wan_interface, "-p", "udp", "--sport", "67", "--dport", "68", "-j", "ACCEPT"]);
+    // Rate-limited ping, useful for diagnostics.
+    ipt(&["-A", "INPUT", "-p", "icmp", "--icmp-type", "echo-request", "-m", "limit", "--limit", "5/second", "-j", "ACCEPT"]);
+    ipt(&["-P", "INPUT", "DROP"]);
+
+    // FORWARD: NAT firewall between LAN and WAN.
+    ipt(&["-A", "FORWARD", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"]);
+    ipt(&["-A", "FORWARD", "-i", lan_interface, "-o", wan_interface, "-j", "ACCEPT"]);
+    ipt(&["-P", "FORWARD", "DROP"]);
 
     Ok(())
 }
