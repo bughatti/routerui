@@ -4,6 +4,7 @@ mod db;
 mod mock;
 mod models;
 mod system;
+mod validate;
 
 use axum::{
     body::Body,

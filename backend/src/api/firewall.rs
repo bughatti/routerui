@@ -1,3 +1,4 @@
+use crate::validate;
 use axum::{extract::Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -463,6 +464,12 @@ fn parse_port_forward(line: &str) -> Option<PortForward> {
 pub async fn add_port_forward(
     Json(payload): Json<AddPortForward>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if !validate::is_ipv4(&payload.internal_ip) {
+        return Err((StatusCode::BAD_REQUEST, "invalid internal IP".into()));
+    }
+    if !matches!(payload.protocol.as_str(), "tcp" | "udp") {
+        return Err((StatusCode::BAD_REQUEST, "protocol must be tcp or udp".into()));
+    }
     if mock::is_mock_mode() {
         return Ok(Json(serde_json::json!({"success": true, "pending": true, "mock": true})));
     }
@@ -623,6 +630,9 @@ fn parse_blocked_ip(line: &str) -> Option<BlockedIP> {
 pub async fn add_blocked_ip(
     Json(payload): Json<AddBlockedIP>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if !validate::is_ipv4_cidr(&payload.ip) {
+        return Err((StatusCode::BAD_REQUEST, "invalid IP address".into()));
+    }
     if mock::is_mock_mode() {
         return Ok(Json(serde_json::json!({"success": true, "pending": true, "mock": true})));
     }

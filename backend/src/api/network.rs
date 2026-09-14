@@ -1,3 +1,4 @@
+use crate::validate;
 use axum::{extract::Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -327,6 +328,17 @@ fn save_static_leases(leases: &[StaticLease]) -> Result<(), (StatusCode, String)
 pub async fn add_static_lease(
     Json(payload): Json<AddStaticLease>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if !validate::is_mac(&payload.mac_address) {
+        return Err((StatusCode::BAD_REQUEST, "invalid MAC address".into()));
+    }
+    if !validate::is_ipv4(&payload.ip_address) {
+        return Err((StatusCode::BAD_REQUEST, "invalid IP address".into()));
+    }
+    if let Some(h) = &payload.hostname {
+        if !h.is_empty() && !validate::is_hostname(h) {
+            return Err((StatusCode::BAD_REQUEST, "invalid hostname".into()));
+        }
+    }
     if mock::is_mock_mode() {
         return Ok(Json(serde_json::json!({"success": true, "mock": true})));
     }
@@ -366,6 +378,12 @@ pub async fn remove_static_lease(
 pub async fn update_dhcp_config(
     Json(payload): Json<UpdateDhcpConfig>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if !validate::is_ipv4(&payload.range_start) || !validate::is_ipv4(&payload.range_end) {
+        return Err((StatusCode::BAD_REQUEST, "invalid DHCP range".into()));
+    }
+    if !validate::is_lease_time(&payload.lease_time) {
+        return Err((StatusCode::BAD_REQUEST, "invalid lease time".into()));
+    }
     if mock::is_mock_mode() {
         return Ok(Json(serde_json::json!({"success": true, "mock": true})));
     }
@@ -485,6 +503,16 @@ pub struct UpdateWifiConfig {
 pub async fn update_wifi(
     Json(payload): Json<UpdateWifiConfig>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if let Some(ssid) = &payload.ssid {
+        if !validate::is_ssid(ssid) {
+            return Err((StatusCode::BAD_REQUEST, "invalid SSID".into()));
+        }
+    }
+    if let Some(pw) = &payload.password {
+        if !validate::is_wifi_passphrase(pw) {
+            return Err((StatusCode::BAD_REQUEST, "WiFi password must be 8-63 printable characters".into()));
+        }
+    }
     if mock::is_mock_mode() {
         return Ok(Json(serde_json::json!({"success": true, "mock": true})));
     }
@@ -660,6 +688,12 @@ fn save_local_dns(entries: &[LocalDnsEntry]) -> Result<(), (StatusCode, String)>
 pub async fn add_local_dns(
     Json(payload): Json<AddLocalDns>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if !validate::is_hostname(&payload.hostname) {
+        return Err((StatusCode::BAD_REQUEST, "invalid hostname".into()));
+    }
+    if !validate::is_ipv4(&payload.ip_address) {
+        return Err((StatusCode::BAD_REQUEST, "invalid IP address".into()));
+    }
     if mock::is_mock_mode() {
         return Ok(Json(serde_json::json!({"success": true, "mock": true})));
     }
@@ -770,6 +804,17 @@ pub struct RemoveRoute {
 pub async fn add_route(
     Json(payload): Json<AddRoute>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if !validate::is_ipv4_cidr(&payload.destination) {
+        return Err((StatusCode::BAD_REQUEST, "invalid destination network".into()));
+    }
+    if !validate::is_ipv4(&payload.gateway) {
+        return Err((StatusCode::BAD_REQUEST, "invalid gateway".into()));
+    }
+    if let Some(i) = &payload.interface {
+        if !i.is_empty() && !validate::is_iface(i) {
+            return Err((StatusCode::BAD_REQUEST, "invalid interface".into()));
+        }
+    }
     if mock::is_mock_mode() {
         return Ok(Json(serde_json::json!({"success": true, "mock": true})));
     }
