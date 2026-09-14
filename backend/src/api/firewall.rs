@@ -488,13 +488,17 @@ pub async fn add_port_forward(
     let ext_port = payload.external_port;
     let int_ip = payload.internal_ip.clone();
     let int_port = payload.internal_port;
+    let wan = crate::api::netutil::wan_iface();
+    if wan.is_empty() {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "no WAN interface (default route) detected".into()));
+    }
 
     let change_fn = move || {
         for proto in &protocols {
             let dnat_result = Command::new("sudo")
                 .args([
                     "iptables", "-t", "nat", "-A", "PREROUTING",
-                    "-i", "enp1s0",
+                    "-i", &wan,
                     "-p", proto,
                     "--dport", &ext_port.to_string(),
                     "-j", "DNAT",
@@ -550,13 +554,14 @@ pub async fn remove_port_forward(
     let ext_port = payload.external_port;
     let int_ip = payload.internal_ip.clone();
     let int_port = payload.internal_port;
+    let wan = crate::api::netutil::wan_iface();
 
     let change_fn = move || {
         for proto in &protocols {
             let _ = Command::new("sudo")
                 .args([
                     "iptables", "-t", "nat", "-D", "PREROUTING",
-                    "-i", "enp1s0",
+                    "-i", &wan,
                     "-p", proto,
                     "--dport", &ext_port.to_string(),
                     "-j", "DNAT",

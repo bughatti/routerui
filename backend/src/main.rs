@@ -95,6 +95,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = Arc::new(AppState { db: pool });
 
+    // Restore router networking that lives outside /etc (VLAN sub-interfaces,
+    // the guest network, QoS shaping, and the active WAN for failover) so it
+    // survives a reboot without a separate systemd unit. These are cheap and
+    // no-ops when nothing is configured.
+    api::vlan::reapply_on_boot();
+    api::guest::reapply_on_boot();
+    api::qos::reapply_on_boot();
+    api::failover::reapply_on_boot();
+    api::traffic::reapply_on_boot();
+
+    // Per-client bandwidth sampler: diff the accounting counters every 2s so the
+    // traffic view has live rates. Cheap (a couple of iptables reads).
+    tokio::spawn(async {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(2));
+        loop {
+            tick.tick().await;
+            tokio::task::spawn_blocking(api::traffic::sample_once).await.ok();
+        }
+    });
+
+    // Dynamic DNS: refresh the provider on a timer so the record follows a
+    // changing WAN IP without user interaction.
+    tokio::spawn(async {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(300));
+        loop {
+            tick.tick().await;
+            let _ = api::ddns::run_updater_once().await;
+        }
+    });
+
+    // Dual-WAN failover: probe the primary uplink and switch if it drops.
+    tokio::spawn(async {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(10));
+        loop {
+            tick.tick().await;
+            let _ = api::failover::run_monitor_once().await;
+        }
+    });
+
     // Same-origin by default: the dashboard is served by this binary, so it
     // needs no CORS. A permissive policy previously let any website call the
     // API through a visitor's browser. Set ROUTERUI_CORS_ORIGIN to opt a
@@ -236,6 +275,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/vpn/wireguard/peers", get(api::wireguard::list_peers))
         .route("/api/vpn/wireguard/peers/add", post(api::wireguard::add_peer))
         .route("/api/vpn/wireguard/peers/remove", post(api::wireguard::remove_peer))
+        // VLANs / multiple networks
+        .route("/api/vlan/list", get(api::vlan::list))
+        .route("/api/vlan/add", post(api::vlan::add))
+        .route("/api/vlan/remove", post(api::vlan::remove))
+        // Guest network
+        .route("/api/guest/status", get(api::guest::status))
+        .route("/api/guest/config", post(api::guest::set_config))
+        // QoS / per-client bandwidth
+        .route("/api/qos/status", get(api::qos::status))
+        .route("/api/qos/config", get(api::qos::get_config).post(api::qos::set_config))
+        .route("/api/qos/apply", post(api::qos::apply))
+        .route("/api/qos/clear", post(api::qos::clear))
+        // Dynamic DNS
+        .route("/api/ddns/config", get(api::ddns::get_config).post(api::ddns::set_config))
+        .route("/api/ddns/status", get(api::ddns::status))
+        .route("/api/ddns/update", post(api::ddns::update_now))
+        // UPnP / NAT-PMP
+        .route("/api/upnp/status", get(api::upnp::status))
+        .route("/api/upnp/mappings", get(api::upnp::mappings))
+        .route("/api/upnp/enable", post(api::upnp::enable))
+        .route("/api/upnp/disable", post(api::upnp::disable))
+        // Dual-WAN failover
+        .route("/api/failover/status", get(api::failover::status))
+        .route("/api/failover/config", post(api::failover::set_config))
+        // Per-client traffic insight (L1 usage, L2 flows, L3 rate, L4 domains)
+        .route("/api/traffic/clients", get(api::traffic::clients))
+        .route("/api/traffic/connections", get(api::traffic::connections))
+        .route("/api/traffic/domains", get(api::traffic::domains))
+        .route("/api/traffic/settings", get(api::traffic::settings).post(api::traffic::set_settings))
+        .route("/api/traffic/reset", post(api::traffic::reset))
         // Tools - Traffic Monitor
         .route("/api/tools/traffic", get(api::tools::traffic_stats))
         // Tools - Diagnostics

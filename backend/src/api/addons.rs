@@ -58,6 +58,9 @@ pub async fn status() -> Result<Json<HashMap<String, AddonStatus>>, (StatusCode,
     // Security monitor
     addons.insert("security".to_string(), check_security());
 
+    // DPI / deep traffic analysis (ntopng)
+    addons.insert("dpi".to_string(), check_ntopng());
+
     Ok(Json(addons))
 }
 
@@ -120,6 +123,13 @@ pub async fn list() -> Result<Json<Vec<AddonInfo>>, (StatusCode, String)> {
             status: check_pihole(),
             install_command: Some("curl -sSL https://install.pi-hole.net | bash".to_string()),
         },
+        AddonInfo {
+            id: "dpi".to_string(),
+            name: "Deep Traffic Analysis (ntopng)".to_string(),
+            description: "Per-application DPI, top talkers, and historical flow analytics via ntopng (nDPI). Heavier; monitors the LAN interface.".to_string(),
+            status: check_ntopng(),
+            install_command: None,
+        },
     ];
 
     Ok(Json(addons))
@@ -137,6 +147,7 @@ pub async fn install(
         "crowdsec" => install_crowdsec().await,
         "wireguard" => install_wireguard().await,
         "jellyfin" => install_jellyfin().await,
+        "dpi" => install_ntopng().await,
         _ => Err(format!("Unknown addon: {}", payload.id)),
     };
 
@@ -525,6 +536,80 @@ async fn install_jellyfin() -> Result<String, String> {
 
     if output.status.success() {
         Ok("Jellyfin installed. Access at http://localhost:8096".to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+// ============ DPI / ntopng (deep traffic analysis) ============
+
+fn check_ntopng() -> AddonStatus {
+    let installed = Command::new("which")
+        .arg("ntopng")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    // ntopng's systemd unit frequently sits in "activating" while actually
+    // serving, so accept that state, and confirm with a port check on 3001.
+    let state = Command::new("systemctl")
+        .args(["is-active", "ntopng"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    let serving = check_port(3001);
+    let running = serving || state == "active" || state == "activating";
+    AddonStatus { installed, running, version: None }
+}
+
+async fn install_ntopng() -> Result<String, String> {
+    // Detect the LAN interface here so ntopng monitors the right NIC (never a
+    // docker/veth/wg virtual interface).
+    let lan = crate::api::netutil::lan_iface();
+    if lan.is_empty() {
+        return Err("Could not determine the LAN interface to monitor.".to_string());
+    }
+    // ntopng pulls redis as a dependency; we point it at the LAN interface, bind
+    // its web UI to port 3001, and enable the service. nDPI (built into ntopng)
+    // does the application classification.
+    let script = format!(
+        r##"set -e
+export DEBIAN_FRONTEND=noninteractive
+# apt-get update can exit non-zero over a single flaky repo; don't let that abort
+# the install when ntopng is still installable from the cache.
+apt-get update -qq || true
+if ! command -v ntopng >/dev/null 2>&1; then
+    apt-get install -y -qq ntopng
+fi
+mkdir -p /etc/ntopng /var/lib/ntopng
+# The Ubuntu ntopng unit reads /etc/ntopng.conf (a file); write there. Port 3001
+# avoids the AdGuard web UI on 3000. Include both common paths for portability.
+CONF_BODY="# Managed by RouterUI. Deep traffic analysis on the LAN interface.
+-i={lan}
+-w=3001
+-d=/var/lib/ntopng
+--community"
+printf '%s\n' "$CONF_BODY" > /etc/ntopng.conf
+printf '%s\n' "$CONF_BODY" > /etc/ntopng/ntopng.conf
+chown -R ntopng:ntopng /var/lib/ntopng 2>/dev/null || true
+systemctl enable ntopng >/dev/null 2>&1 || true
+# ntopng's unit often lingers in "activating" even when it's serving fine, so
+# restart may report a timeout; don't treat that as fatal. Verify by HTTP.
+systemctl restart ntopng >/dev/null 2>&1 || true
+for i in 1 2 3 4 5 6 7 8; do
+    sleep 2
+    curl -s -o /dev/null http://127.0.0.1:3001/ && break
+done
+curl -s -o /dev/null http://127.0.0.1:3001/ || {{ echo "ntopng not responding on :3001 (check: journalctl -u ntopng)"; exit 1; }}
+echo OK
+"##,
+        lan = lan
+    );
+    let output = Command::new("bash")
+        .args(["-c", &script])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok("ntopng installed. Deep traffic analysis is available on the Traffic page (DPI section).".to_string())
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }

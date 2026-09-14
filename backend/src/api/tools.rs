@@ -359,37 +359,34 @@ pub async fn dns_lookup(Json(payload): Json<DnsLookupRequest>) -> Result<Json<Dn
 }
 
 pub async fn speed_test() -> Result<Json<SpeedTestResult>, (StatusCode, String)> {
-    // Run speedtest-cli
-    let output = Command::new("speedtest-cli")
-        .args(["--simple"])
+    // librespeed-cli is the primary engine: a single self-contained binary,
+    // no account/licence, no rate limits, JSON output. Its JSON is an array
+    // with one object carrying download/upload (already Mbps) and ping (ms).
+    let out = Command::new("librespeed-cli")
+        .args(["--json"])
         .output()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-
-    let mut ping_ms = None;
-    let mut download_mbps = None;
-    let mut upload_mbps = None;
-
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 2 {
-            match parts[0] {
-                "Ping:" => ping_ms = parts[1].parse().ok(),
-                "Download:" => download_mbps = parts[1].parse().ok(),
-                "Upload:" => upload_mbps = parts[1].parse().ok(),
-                _ => {}
-            }
-        }
+        .map_err(|_| (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "speed-test tool not available (librespeed-cli is installed with the router core)".to_string(),
+        ))?;
+    if !out.status.success() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("speed test failed: {}", String::from_utf8_lossy(&out.stderr)),
+        ));
     }
-
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let v: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("could not parse speed-test result: {e}")))?;
+    // librespeed-cli emits a one-element array; accept either shape.
+    let obj = v.get(0).cloned().unwrap_or(v);
     Ok(Json(SpeedTestResult {
         running: false,
         completed: true,
-        download_mbps,
-        upload_mbps,
-        ping_ms,
-        server: None,
+        download_mbps: obj.get("download").and_then(|x| x.as_f64()),
+        upload_mbps: obj.get("upload").and_then(|x| x.as_f64()),
+        ping_ms: obj.get("ping").and_then(|x| x.as_f64()),
+        server: obj.get("server").and_then(|s| s.get("name")).and_then(|n| n.as_str()).map(|s| s.to_string()),
         output: stdout,
     }))
 }

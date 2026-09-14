@@ -81,7 +81,9 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     iptables \
     iptables-persistent \
     ipset \
+    conntrack \
     vnstat \
+    vlan \
     curl \
     wget \
     sqlite3 \
@@ -92,6 +94,32 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 echo "  - dnsmasq (DHCP/DNS)"
 echo "  - iptables-persistent (firewall)"
 echo "  - vnstat (traffic monitoring)"
+echo "  - vlan + speedtest-cli (networks, WAN speed test)"
+
+# Router-core kernel modules: 802.1q VLANs and the QoS qdiscs/classifier used by
+# the traffic-shaping (QoS) feature. These are standard on Ubuntu and usually
+# auto-load, but load + persist them so VLANs and rate limits work on first use.
+for mod in 8021q sch_htb sch_cake sch_fq_codel cls_u32; do
+    modprobe "$mod" 2>/dev/null || true
+done
+printf '8021q\nsch_htb\nsch_cake\nsch_fq_codel\ncls_u32\n' > /etc/modules-load.d/routerui.conf 2>/dev/null || true
+
+# Per-client traffic insight needs conntrack byte accounting on. Persist it so
+# live per-device flow byte counts survive a reboot.
+echo 'net.netfilter.nf_conntrack_acct = 1' > /etc/sysctl.d/99-routerui-conntrack.conf 2>/dev/null || true
+sysctl -w net.netfilter.nf_conntrack_acct=1 >/dev/null 2>&1 || true
+
+# librespeed-cli: single self-contained binary for the WAN speed test (no
+# account, no licence, no rate limits). Best-effort; the UI degrades gracefully.
+if ! command -v librespeed-cli >/dev/null 2>&1; then
+    LS_ARCH=$(uname -m); case "$LS_ARCH" in x86_64) LS_ARCH=amd64;; aarch64) LS_ARCH=arm64;; armv7l) LS_ARCH=armv7;; esac
+    LS_VER="1.0.11"
+    curl -fsSL "https://github.com/librespeed/speedtest-cli/releases/download/v${LS_VER}/librespeed-cli_${LS_VER}_linux_${LS_ARCH}.tar.gz" -o /tmp/librespeed.tgz 2>/dev/null \
+        && tar -xzf /tmp/librespeed.tgz -C /tmp librespeed-cli 2>/dev/null \
+        && install -m755 /tmp/librespeed-cli /usr/local/bin/librespeed-cli 2>/dev/null \
+        && rm -f /tmp/librespeed.tgz /tmp/librespeed-cli
+    command -v librespeed-cli >/dev/null 2>&1 && echo "  - librespeed-cli (WAN speed test)" || echo "  - (speed test binary skipped; install librespeed-cli later)"
+fi
 
 # Disable dnsmasq for now (setup wizard will configure and enable it)
 systemctl stop dnsmasq 2>/dev/null || true

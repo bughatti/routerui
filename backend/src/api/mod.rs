@@ -1,5 +1,6 @@
 pub mod addons;
 pub mod auth;
+pub mod netutil;
 pub mod firewall;
 pub mod protection;
 pub mod antivirus;
@@ -16,6 +17,13 @@ pub mod tools;
 pub mod security;
 pub mod media;
 pub mod setup;
+pub mod vlan;
+pub mod guest;
+pub mod qos;
+pub mod ddns;
+pub mod upnp;
+pub mod failover;
+pub mod traffic;
 
 use std::sync::Arc;
 

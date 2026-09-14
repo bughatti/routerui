@@ -13,8 +13,15 @@
   // Core navigation - always visible
   const coreNavItems = [
     { href: '/', label: 'Dashboard', icon: '📊' },
+    { href: '/traffic', label: 'Traffic', icon: '📈' },
     { href: '/network', label: 'Network', icon: '🌐' },
+    { href: '/vlan', label: 'Networks', icon: '🗂️' },
+    { href: '/guest', label: 'Guest Wi-Fi', icon: '🎫' },
     { href: '/firewall', label: 'Firewall', icon: '🔥' },
+    { href: '/qos', label: 'Traffic (QoS)', icon: '📶' },
+    { href: '/ddns', label: 'Dynamic DNS', icon: '🌍' },
+    { href: '/upnp', label: 'UPnP', icon: '🔁' },
+    { href: '/failover', label: 'WAN Failover', icon: '🔀' },
     { href: '/services', label: 'Services', icon: '⚙️' },
     { href: '/users', label: 'Users', icon: '👥' },
     { href: '/system', label: 'System', icon: '🖥️' },

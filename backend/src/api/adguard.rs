@@ -246,13 +246,18 @@ pub async fn add_rule(
         rules.push(payload.rule.clone());
     }
     
+    // AdGuard's set_rules returns 200 with an empty body on success; do NOT
+    // call .json() on it (that yields "error decoding response body"). Only
+    // check the HTTP status via error_for_status(), which never reads the body.
     c.post(format!("{}/control/filtering/set_rules", ADGUARD_URL))
         .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .json(&serde_json::json!({ "rules": rules }))
         .send()
         .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?
+        .error_for_status()
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
-    
+
     Ok(Json(serde_json::json!({ "success": true, "rule": payload.rule })))
 }
 
@@ -278,12 +283,102 @@ pub async fn remove_rule(
     
     let rules: Vec<String> = status.user_rules.into_iter().filter(|r| r != &payload.rule).collect();
     
+    // set_rules returns an empty 200 body on success; check status only.
     c.post(format!("{}/control/filtering/set_rules", ADGUARD_URL))
         .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .json(&serde_json::json!({ "rules": rules }))
         .send()
         .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?
+        .error_for_status()
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
-    
+
     Ok(Json(serde_json::json!({ "success": true })))
+}
+
+// ---- Per-client traffic insight helpers (used by api::traffic, L4) ----
+
+/// Top resolved domains for one client IP, from AdGuard's query log. Returns
+/// `[{ "domain": <name>, "count": <n> }]` busiest first. Errors if AdGuard is
+/// not reachable (the traffic module treats that as "L4 unavailable").
+pub async fn top_domains_for_client(ip: &str) -> Result<Vec<serde_json::Value>, String> {
+    if mock::is_mock_mode() {
+        return Ok(vec![]);
+    }
+    let c = client();
+    // `search` narrows the log to this client; response_status=all keeps blocked
+    // and allowed alike so the picture is complete.
+    let url = format!(
+        "{}/control/querylog?limit=1000&search={}&response_status=all",
+        ADGUARD_URL, ip
+    );
+    let resp = c
+        .get(url)
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+
+    let mut counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    if let Some(data) = body.get("data").and_then(|d| d.as_array()) {
+        for entry in data {
+            // Only count rows actually from this client (search is fuzzy).
+            let client_ip = entry.get("client").and_then(|c| c.as_str()).unwrap_or("");
+            if client_ip != ip {
+                continue;
+            }
+            if let Some(name) = entry
+                .get("question")
+                .and_then(|q| q.get("name"))
+                .and_then(|n| n.as_str())
+            {
+                if !name.is_empty() {
+                    *counts.entry(name.to_ascii_lowercase()).or_default() += 1;
+                }
+            }
+        }
+    }
+    let mut ranked: Vec<(String, u64)> = counts.into_iter().collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    ranked.truncate(20);
+    Ok(ranked
+        .into_iter()
+        .map(|(domain, count)| serde_json::json!({ "domain": domain, "count": count }))
+        .collect())
+}
+
+/// Best-effort: align AdGuard's query-log retention with the traffic-insight
+/// retention cap (in hours). Silently succeeds as a no-op if AdGuard is absent
+/// or the endpoint shape differs by version — this is a privacy convenience,
+/// not a hard dependency.
+pub async fn set_querylog_retention(hours: u32) -> Result<(), String> {
+    if mock::is_mock_mode() {
+        return Ok(());
+    }
+    let c = client();
+    // Newer AdGuard expects the interval in milliseconds.
+    let interval_ms: u64 = (hours as u64).max(1) * 3600 * 1000;
+    let body = serde_json::json!({
+        "enabled": true,
+        "interval": interval_ms,
+        "anonymize_client_ip": false
+    });
+    // Try the current endpoint, then the legacy one; ignore a version mismatch.
+    for ep in ["/control/querylog/config/update", "/control/querylog_config"] {
+        let r = c
+            .post(format!("{}{}", ADGUARD_URL, ep))
+            .basic_auth(adguard_creds().0, Some(adguard_creds().1))
+            .json(&body)
+            .send()
+            .await;
+        if let Ok(resp) = r {
+            if resp.status().is_success() {
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
 }
