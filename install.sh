@@ -80,6 +80,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     dnsmasq \
     iptables \
     iptables-persistent \
+    ipset \
     vnstat \
     curl \
     wget \
@@ -111,7 +112,7 @@ echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-routerui.conf
 
 # Step 3: Create directory structure
 echo -e "${GREEN}[3/5]${NC} Creating RouterUI directories..."
-mkdir -p $ROUTERUI_DIR/{config,frontend}
+mkdir -p $ROUTERUI_DIR/{config,frontend,blocklists}
 
 # Step 4: Download RouterUI
 echo -e "${GREEN}[4/5]${NC} Downloading RouterUI..."

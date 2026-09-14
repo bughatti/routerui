@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::mock;
 use super::AuthUser;
 
-const ADGUARD_URL: &str = "http://10.22.22.1:3000";
+const ADGUARD_URL: &str = "http://127.0.0.1:3000";
 const ADGUARD_USER: &str = "admin";
 const ADGUARD_PASS: &str = "routerui123";
 
