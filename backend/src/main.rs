@@ -230,6 +230,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/vpn/tailscale/netcheck", get(api::vpn::tailscale_netcheck))
         .route("/api/vpn/gluetun/status", get(api::vpn::gluetun_status))
         .route("/api/vpn/gluetun/restart", post(api::vpn::gluetun_restart))
+        // WireGuard VPN server (self-hosted; installed as an addon)
+        .route("/api/vpn/wireguard/status", get(api::wireguard::status))
+        .route("/api/vpn/wireguard/disable", post(api::wireguard::disable))
+        .route("/api/vpn/wireguard/peers", get(api::wireguard::list_peers))
+        .route("/api/vpn/wireguard/peers/add", post(api::wireguard::add_peer))
+        .route("/api/vpn/wireguard/peers/remove", post(api::wireguard::remove_peer))
         // Tools - Traffic Monitor
         .route("/api/tools/traffic", get(api::tools::traffic_stats))
         // Tools - Diagnostics

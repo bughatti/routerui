@@ -11,6 +11,7 @@ pub mod users;
 pub mod services;
 pub mod docker;
 pub mod vpn;
+pub mod wireguard;
 pub mod tools;
 pub mod security;
 pub mod media;

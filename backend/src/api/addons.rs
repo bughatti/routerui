@@ -40,6 +40,9 @@ pub async fn status() -> Result<Json<HashMap<String, AddonStatus>>, (StatusCode,
     // VPN (Tailscale or Gluetun)
     addons.insert("vpn".to_string(), check_vpn());
 
+    // WireGuard VPN server (self-hosted)
+    addons.insert("wireguard".to_string(), check_wireguard());
+
     // Docker
     addons.insert("docker".to_string(), check_docker());
 
@@ -74,6 +77,13 @@ pub async fn list() -> Result<Json<Vec<AddonInfo>>, (StatusCode, String)> {
             description: "Mesh VPN for secure remote access".to_string(),
             status: check_tailscale(),
             install_command: Some("curl -fsSL https://tailscale.com/install.sh | sh".to_string()),
+        },
+        AddonInfo {
+            id: "wireguard".to_string(),
+            name: "WireGuard VPN".to_string(),
+            description: "Self-hosted VPN server; add peers and get QR-code configs".to_string(),
+            status: check_wireguard(),
+            install_command: None,
         },
         AddonInfo {
             id: "docker".to_string(),
@@ -125,6 +135,7 @@ pub async fn install(
         "docker" => install_docker().await,
         "antivirus" => install_antivirus().await,
         "crowdsec" => install_crowdsec().await,
+        "wireguard" => install_wireguard().await,
         "jellyfin" => install_jellyfin().await,
         _ => Err(format!("Unknown addon: {}", payload.id)),
     };
@@ -207,6 +218,24 @@ fn check_gluetun() -> AddonStatus {
         running,
         version: None,
     }
+}
+
+fn check_wireguard() -> AddonStatus {
+    let installed = Command::new("which")
+        .arg("wg")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let running = Command::new("sudo")
+        .args(["wg", "show", "wg0"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    AddonStatus { installed, running, version: None }
+}
+
+async fn install_wireguard() -> Result<String, String> {
+    crate::api::wireguard::setup_server()
 }
 
 fn check_docker() -> AddonStatus {
