@@ -8,8 +8,22 @@ use crate::mock;
 use super::AuthUser;
 
 const ADGUARD_URL: &str = "http://127.0.0.1:3000";
-const ADGUARD_USER: &str = "admin";
-const ADGUARD_PASS: &str = "routerui123";
+const ADGUARD_CRED_FILE: &str = "/opt/routerui/config/adguard.cred";
+
+// AdGuard admin credentials are generated when the addon is installed and
+// stored in ADGUARD_CRED_FILE ("user:password"). No secret is baked into the
+// binary. Falls back to the historical default only if the file is absent, so
+// an already-configured older install keeps working.
+fn adguard_creds() -> (String, String) {
+    if let Ok(contents) = std::fs::read_to_string(ADGUARD_CRED_FILE) {
+        if let Some((u, p)) = contents.trim().split_once(':') {
+            if !u.is_empty() && !p.is_empty() {
+                return (u.to_string(), p.to_string());
+            }
+        }
+    }
+    ("admin".to_string(), "routerui123".to_string())
+}
 
 fn client() -> reqwest::Client {
     reqwest::Client::builder()
@@ -71,7 +85,7 @@ pub async fn overview(
     
     let status: serde_json::Value = c
         .get(format!("{}/control/status", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .send()
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, format!("AdGuard connection failed: {}", e)))?
@@ -81,7 +95,7 @@ pub async fn overview(
     
     let stats: serde_json::Value = c
         .get(format!("{}/control/stats", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .send()
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?
@@ -118,7 +132,7 @@ pub async fn toggle_protection(
     let c = client();
     
     c.post(format!("{}/control/dns_config", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .json(&serde_json::json!({ "protection_enabled": payload.enabled }))
         .send()
         .await
@@ -138,7 +152,7 @@ pub async fn query_log(
     
     let response: serde_json::Value = c
         .get(format!("{}/control/querylog?limit=100", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .send()
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?
@@ -165,7 +179,7 @@ pub async fn filters(
 
     let response: FilterStatus = c
         .get(format!("{}/control/filtering/status", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .send()
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?
@@ -193,7 +207,7 @@ pub async fn toggle_filter(
     let c = client();
     
     c.post(format!("{}/control/filtering/set_url", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .json(&serde_json::json!({ "url": payload.url, "data": { "enabled": payload.enabled } }))
         .send()
         .await
@@ -219,7 +233,7 @@ pub async fn add_rule(
     
     let status: FilterStatus = c
         .get(format!("{}/control/filtering/status", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .send()
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?
@@ -233,7 +247,7 @@ pub async fn add_rule(
     }
     
     c.post(format!("{}/control/filtering/set_rules", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .json(&serde_json::json!({ "rules": rules }))
         .send()
         .await
@@ -254,7 +268,7 @@ pub async fn remove_rule(
     
     let status: FilterStatus = c
         .get(format!("{}/control/filtering/status", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .send()
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?
@@ -265,7 +279,7 @@ pub async fn remove_rule(
     let rules: Vec<String> = status.user_rules.into_iter().filter(|r| r != &payload.rule).collect();
     
     c.post(format!("{}/control/filtering/set_rules", ADGUARD_URL))
-        .basic_auth(ADGUARD_USER, Some(ADGUARD_PASS))
+        .basic_auth(adguard_creds().0, Some(adguard_creds().1))
         .json(&serde_json::json!({ "rules": rules }))
         .send()
         .await

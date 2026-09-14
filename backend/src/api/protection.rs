@@ -209,6 +209,14 @@ fn add_ipset_rule(set_name: &str) -> Result<(), (StatusCode, String)> {
         .output()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Also stop LAN clients from reaching the blocked network. INPUT only
+    // covers traffic to the router itself; forwarded (routed) traffic needs a
+    // FORWARD rule matching the destination. Inserted at the top so it beats
+    // the general "FORWARD -j ACCEPT" the router installs for NAT.
+    let _ = Command::new("sudo")
+        .args(["iptables", "-I", "FORWARD", "1", "-m", "set", "--match-set", set_name, "dst", "-j", "DROP"])
+        .output();
+
     Ok(())
 }
 
@@ -222,6 +230,11 @@ fn remove_ipset_rule(set_name: &str) -> Result<(), (StatusCode, String)> {
     // Remove DROP rule
     let _ = Command::new("sudo")
         .args(["iptables", "-D", "INPUT", "-m", "set", "--match-set", set_name, "src", "-j", "DROP"])
+        .output();
+
+    // Remove the forwarded-traffic (LAN -> country) rule.
+    let _ = Command::new("sudo")
+        .args(["iptables", "-D", "FORWARD", "-m", "set", "--match-set", set_name, "dst", "-j", "DROP"])
         .output();
 
     Ok(())

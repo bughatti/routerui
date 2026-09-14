@@ -370,13 +370,47 @@ fn check_port(port: u16) -> bool {
 // ============ INSTALL FUNCTIONS ============
 
 async fn install_adguard() -> Result<String, String> {
+    // Install AdGuard, configure it, and put it in the DNS path so it actually
+    // filters client queries. On a fresh install we generate an admin password
+    // (no baked-in secret) stored for the RouterUI<->AdGuard API, set AdGuard's
+    // DNS to 127.0.0.1:5353, and point dnsmasq's upstream at it so client
+    // lookups (dnsmasq:53 -> AdGuard:5353) are filtered.
+    let script = r#"
+set -e
+if ! test -x /opt/AdGuardHome/AdGuardHome; then
+  curl -s -S -L https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh | sh -s -- -v
+fi
+mkdir -p /opt/routerui/config
+if ! test -f /opt/AdGuardHome/AdGuardHome.yaml; then
+  PW=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 20)
+  [ -z "$PW" ] && PW=$(date +%s%N | sha256sum | head -c 20)
+  # Wait for AdGuard's setup API (302 = setup mode, 200 = up).
+  for i in $(seq 1 30); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/control/status)
+    if [ "$code" = "302" ] || [ "$code" = "200" ]; then break; fi
+    sleep 1
+  done
+  # JSON via heredoc to avoid shell/JSON quoting problems.
+  cat > /tmp/rui-ag.json <<JSON
+{"web":{"ip":"0.0.0.0","port":3000},"dns":{"ip":"127.0.0.1","port":5353},"username":"admin","password":"$PW"}
+JSON
+  rc=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/control/install/configure -H 'Content-Type: application/json' --data @/tmp/rui-ag.json)
+  rm -f /tmp/rui-ag.json
+  if [ "$rc" != "200" ]; then echo "adguard configure failed (HTTP $rc)" >&2; exit 1; fi
+  printf 'admin:%s' "$PW" > /opt/routerui/config/adguard.cred
+  chmod 600 /opt/routerui/config/adguard.cred
+fi
+printf 'no-resolv\nserver=127.0.0.1#5353\n' > /etc/dnsmasq.d/adguard.conf
+systemctl restart dnsmasq 2>/dev/null || service dnsmasq restart 2>/dev/null || true
+echo OK
+"#;
     let output = Command::new("bash")
-        .args(["-c", "curl -s -S -L https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh | sh -s -- -v"])
+        .args(["-c", script])
         .output()
         .map_err(|e| e.to_string())?;
 
     if output.status.success() {
-        Ok("AdGuard Home installed. Complete setup at http://localhost:3000".to_string())
+        Ok("AdGuard Home installed, configured, and filtering client DNS.".to_string())
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
