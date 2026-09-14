@@ -9,7 +9,6 @@
   let isLoginRoute = $derived($page.url.pathname.startsWith('/login'));
   let currentUser = $state('');
   let installedAddons = $state({});
-  let hasCheckedSetup = $state(false);
 
   // Core navigation - always visible
   const coreNavItems = [
@@ -45,55 +44,61 @@
       return;
     }
 
-    // Not on setup route - need to verify setup and load addons
-    if (!hasCheckedSetup) {
-      hasCheckedSetup = true;
-      checkSetupAndLoadAddons();
-    } else {
-      // Already checked, just mark as ready
-      setupChecked = true;
-    }
+    // On every protected route, verify setup is done and a session exists,
+    // so an expired or missing session sends the user to login instead of
+    // showing "failed to load" errors.
+    checkSetupAndLoadAddons();
   });
 
+  let guarding = false;
+  let addonsLoaded = false;
+
   async function checkSetupAndLoadAddons() {
+    if (guarding) return;
+    guarding = true;
     try {
-      const res = await fetch('/api/setup/status');
-      if (res.ok) {
-        const status = await res.json();
-        if (!status.is_complete) {
+      // 1. Setup must be complete.
+      try {
+        const res = await fetch('/api/setup/status');
+        if (res.ok && !(await res.json()).is_complete) {
           goto('/setup');
           return;
         }
+      } catch (e) {
+        console.warn('Setup check failed:', e);
       }
-    } catch (e) {
-      console.warn('Setup check failed:', e);
-    }
 
-    // Require a valid session; otherwise send the user to the login page.
-    try {
-      const me = await fetch('/api/auth/me');
-      if (me.status === 401 || me.status === 403) {
-        goto('/login');
-        return;
+      // 2. A valid session is required; 401/403 -> login.
+      try {
+        const me = await fetch('/api/auth/me');
+        if (me.status === 401 || me.status === 403) {
+          goto('/login');
+          return;
+        }
+        if (me.ok) {
+          currentUser = (await me.json()).username || '';
+        }
+      } catch (e) {
+        console.warn('Auth check failed:', e);
       }
-      if (me.ok) {
-        currentUser = (await me.json()).username || '';
-      }
-    } catch (e) {
-      console.warn('Auth check failed:', e);
-    }
 
-    // Fetch installed addons
-    try {
-      const addonsRes = await fetch('/api/addons/status');
-      if (addonsRes.ok) {
-        installedAddons = await addonsRes.json();
+      // 3. Load installed addons once (for the optional nav).
+      if (!addonsLoaded) {
+        try {
+          const addonsRes = await fetch('/api/addons/status');
+          if (addonsRes.ok) {
+            installedAddons = await addonsRes.json();
+            addonsLoaded = true;
+          }
+        } catch (e) {
+          console.warn('Failed to fetch addons status:', e);
+        }
       }
-    } catch (e) {
-      console.warn('Failed to fetch addons status:', e);
-    }
 
-    setupChecked = true;
+      setupChecked = true;
+    } finally {
+      guarding = false;
+    }
   }
 
   async function logout() {

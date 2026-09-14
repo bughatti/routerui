@@ -422,7 +422,7 @@
           </p>
         </div>
 
-        <a href="/" class="btn btn-primary px-8 py-3 text-lg">Go to Dashboard</a>
+        <a href="/login" data-sveltekit-reload class="btn btn-primary px-8 py-3 text-lg">Continue to Login</a>
       </div>
     {/if}
   </div>
