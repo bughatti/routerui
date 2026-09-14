@@ -6,6 +6,8 @@
   let { children } = $props();
   let setupChecked = $state(false);
   let isSetupRoute = $derived($page.url.pathname.startsWith('/setup'));
+  let isLoginRoute = $derived($page.url.pathname.startsWith('/login'));
+  let currentUser = $state('');
   let installedAddons = $state({});
   let hasCheckedSetup = $state(false);
 
@@ -37,8 +39,8 @@
 
   // Effect to check setup status and fetch addons when route changes
   $effect(() => {
-    // On setup routes, just mark as checked
-    if (isSetupRoute) {
+    // Setup and login pages render on their own, no session needed here.
+    if (isSetupRoute || isLoginRoute) {
       setupChecked = true;
       return;
     }
@@ -67,6 +69,20 @@
       console.warn('Setup check failed:', e);
     }
 
+    // Require a valid session; otherwise send the user to the login page.
+    try {
+      const me = await fetch('/api/auth/me');
+      if (me.status === 401 || me.status === 403) {
+        goto('/login');
+        return;
+      }
+      if (me.ok) {
+        currentUser = (await me.json()).username || '';
+      }
+    } catch (e) {
+      console.warn('Auth check failed:', e);
+    }
+
     // Fetch installed addons
     try {
       const addonsRes = await fetch('/api/addons/status');
@@ -79,6 +95,11 @@
 
     setupChecked = true;
   }
+
+  async function logout() {
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { /* ignore */ }
+    goto('/login');
+  }
 </script>
 
 {#if !setupChecked && !isSetupRoute}
@@ -89,8 +110,8 @@
       <p class="mt-4 text-gray-400">Loading RouterUI...</p>
     </div>
   </div>
-{:else if isSetupRoute}
-  <!-- Setup pages have their own layout -->
+{:else if isSetupRoute || isLoginRoute}
+  <!-- Setup and login pages have their own layout -->
   {@render children()}
 {:else}
   <div class="flex h-screen">
@@ -152,8 +173,9 @@
         </div>
       </nav>
 
-      <div class="p-4 border-t border-gray-700 text-xs text-gray-500">
-        <p>Logged in as: admin</p>
+      <div class="p-4 border-t border-gray-700 text-xs text-gray-500 flex items-center justify-between">
+        <span>Logged in as: {currentUser || '…'}</span>
+        <button onclick={logout} class="text-blue-400 hover:text-blue-300">Log out</button>
       </div>
     </aside>
 

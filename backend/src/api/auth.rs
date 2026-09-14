@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::{header::SET_COOKIE, StatusCode},
+    http::{header::SET_COOKIE, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -34,6 +34,9 @@ pub async fn login(
     if !auth::verify_password(&payload.password, &user.password_hash) {
         return Err((StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()));
     }
+
+    // Opportunistic cleanup of expired sessions.
+    auth::purge_expired_sessions(&state.db).await;
 
     // Create session
     let token = auth::create_session(&state.db, user.id, None)
@@ -71,15 +74,16 @@ pub async fn login(
 
 pub async fn logout(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     AuthUser(user): AuthUser,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // In a real implementation, we'd get the token from the request
-    // For now, just return success
+    // Revoke the presented session so the token cannot be reused.
+    if let Some(token) = super::token_from_headers(&headers) {
+        let _ = auth::revoke_session(&state.db, &token).await;
+    }
     tracing::info!("User {} logged out", user.username);
-    
-    // Clear cookie
+
     let cookie = "session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0";
-    
     Ok((
         [(SET_COOKIE, cookie)],
         Json(serde_json::json!({ "success": true })),

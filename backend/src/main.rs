@@ -6,18 +6,70 @@ mod models;
 mod system;
 
 use axum::{
+    body::Body,
+    extract::{Request, State},
+    http::StatusCode,
+    middleware::{self, Next},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     Router,
 };
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub struct AppState {
     pub db: sqlx::SqlitePool,
+}
+
+/// Central authentication gate. Everything under /api requires a valid admin
+/// session except: the login endpoint, the setup status probe, and — only
+/// while the setup wizard has not yet completed — the setup routes that create
+/// the first admin. Non-/api paths are the static dashboard and pass through.
+/// SPA fallback: returns index.html with a 200 status for any unmatched path.
+async fn spa_index() -> Response {
+    let dir = std::env::var("FRONTEND_DIR")
+        .unwrap_or_else(|_| "/opt/routerui/frontend/build".to_string());
+    match tokio::fs::read_to_string(format!("{}/index.html", dir)).await {
+        Ok(html) => Html(html).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "UI not found").into_response(),
+    }
+}
+
+async fn auth_gate(State(state): State<Arc<AppState>>, req: Request, next: Next) -> Response {
+    let path = req.uri().path().to_string();
+
+    let is_public = !path.starts_with("/api/")
+        || path == "/api/auth/login"
+        || path == "/api/setup/status";
+
+    let allow = if is_public {
+        true
+    } else if path.starts_with("/api/setup/") && !api::setup_complete(&state.db).await {
+        // First-run: setup routes are open until the wizard records completion.
+        true
+    } else {
+        match api::token_from_headers(req.headers()) {
+            Some(token) => matches!(
+                auth::validate_session(&state.db, &token).await,
+                Ok(Some(user)) if user.enabled
+            ),
+            None => false,
+        }
+    };
+
+    if allow {
+        next.run(req).await
+    } else {
+        Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"error":"authentication required"}"#))
+            .unwrap()
+    }
 }
 
 #[tokio::main]
@@ -42,10 +94,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = Arc::new(AppState { db: pool });
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // Same-origin by default: the dashboard is served by this binary, so it
+    // needs no CORS. A permissive policy previously let any website call the
+    // API through a visitor's browser. Set ROUTERUI_CORS_ORIGIN to opt a
+    // specific site in.
+    let cors = match std::env::var("ROUTERUI_CORS_ORIGIN") {
+        Ok(origin) if !origin.is_empty() => CorsLayer::new()
+            .allow_origin(origin.parse::<axum::http::HeaderValue>().expect("invalid ROUTERUI_CORS_ORIGIN"))
+            .allow_methods(tower_http::cors::Any)
+            .allow_headers(tower_http::cors::Any),
+        _ => CorsLayer::new(),
+    };
 
     let frontend_dir = std::env::var("FRONTEND_DIR")
         .unwrap_or_else(|_| "/opt/routerui/frontend/build".to_string());
@@ -192,17 +251,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/security/connections", get(api::security::connections))
         // Media Center
         .route("/api/media/overview", get(api::media::overview))
-        // Middleware
+        // Built front-end assets (hashed JS/CSS). Real files, correct types.
+        .nest_service("/_app", ServeDir::new(format!("{}/_app", frontend_dir)))
+        // Middleware. The auth gate runs first (outermost of these three) and
+        // rejects unauthenticated requests to protected routes before any
+        // handler is reached.
+        .layer(middleware::from_fn_with_state(state.clone(), auth_gate))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
-        .fallback_service(
-            ServeDir::new(&frontend_dir)
-                .not_found_service(ServeFile::new(format!("{}/index.html", frontend_dir)))
-        );
+        // Any non-API, non-asset path returns index.html with 200, so the
+        // single-page app owns routing and deep links / refreshes (e.g.
+        // /login, /firewall) work instead of returning 404.
+        .fallback(spa_index);
 
     let port = std::env::var("ROUTERUI_PORT").unwrap_or_else(|_| "3080".to_string());
-    let addr = format!("0.0.0.0:{}", port);
+    let bind = std::env::var("ROUTERUI_BIND").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let addr = format!("{}:{}", bind, port);
     tracing::info!("Starting RouterUI on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;

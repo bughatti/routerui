@@ -35,11 +35,32 @@ pub fn generate_token() -> String {
 }
 
 pub fn hash_token(token: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    token.hash(&mut hasher);
-    format!("{:x}", hasher.finish())
+    // Session tokens are looked up by hash, so the hash must be a real
+    // cryptographic one. The previous DefaultHasher (SipHash, 64-bit) was not
+    // suitable for authentication material.
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+/// Deletes a session by its raw token. Used on logout.
+pub async fn revoke_session(pool: &SqlitePool, token: &str) -> Result<(), sqlx::Error> {
+    let token_hash = hash_token(token);
+    sqlx::query("DELETE FROM sessions WHERE token_hash = ?")
+        .bind(&token_hash)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Removes expired sessions. Cheap; called opportunistically on login.
+pub async fn purge_expired_sessions(pool: &SqlitePool) {
+    let now = chrono::Utc::now().to_rfc3339();
+    let _ = sqlx::query("DELETE FROM sessions WHERE expires_at <= ?")
+        .bind(&now)
+        .execute(pool)
+        .await;
 }
 
 pub fn check_password_strength(password: &str) -> PasswordStrength {

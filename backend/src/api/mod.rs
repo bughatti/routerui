@@ -16,37 +16,71 @@ pub mod security;
 pub mod media;
 pub mod setup;
 
+use std::sync::Arc;
+
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{header, request::Parts, HeaderMap, StatusCode},
 };
 
-use crate::models::User;
+use crate::{models::User, AppState};
 
-// Auth extractor - gets current user from session token
+/// Pulls the session token from an `Authorization: Bearer <token>` header or
+/// the `session` cookie, whichever is present.
+pub fn token_from_headers(headers: &HeaderMap) -> Option<String> {
+    if let Some(v) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
+        if let Some(t) = v.strip_prefix("Bearer ") {
+            let t = t.trim();
+            if !t.is_empty() {
+                return Some(t.to_string());
+            }
+        }
+    }
+    let cookies = headers.get(header::COOKIE).and_then(|v| v.to_str().ok())?;
+    for part in cookies.split(';') {
+        let part = part.trim();
+        if let Some(t) = part.strip_prefix("session=") {
+            if !t.is_empty() {
+                return Some(t.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// True once the setup wizard has recorded completion. While false, the setup
+/// routes are reachable without a session so the first admin can be created;
+/// afterwards they require authentication like everything else.
+pub async fn setup_complete(pool: &sqlx::SqlitePool) -> bool {
+    sqlx::query_scalar::<_, String>(
+        "SELECT value FROM setup_config WHERE key = 'setup_complete'",
+    )
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
+    .map(|v| v == "true")
+    .unwrap_or(false)
+}
+
+// Auth extractor - resolves the current user from the session token, or 401.
 pub struct AuthUser(pub User);
 
-impl<S> FromRequestParts<S> for AuthUser
-where
-    S: Send + Sync,
-{
+impl FromRequestParts<Arc<AppState>> for AuthUser {
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(
-        _parts: &mut Parts,
-        _state: &S,
+        parts: &mut Parts,
+        state: &Arc<AppState>,
     ) -> Result<Self, Self::Rejection> {
-        // For now, skip auth and return a dummy user for testing
-        // TODO: Implement proper auth extraction from cookie/header
-        Ok(AuthUser(User {
-            id: 1,
-            username: "test".to_string(),
-            password_hash: "".to_string(),
-            role: "admin".to_string(),
-            enabled: true,
-            created_at: "".to_string(),
-            last_login: None,
-        }))
+        let token = token_from_headers(&parts.headers)
+            .ok_or((StatusCode::UNAUTHORIZED, "Authentication required"))?;
+        match crate::auth::validate_session(&state.db, &token).await {
+            Ok(Some(user)) if user.enabled => Ok(AuthUser(user)),
+            Ok(Some(_)) => Err((StatusCode::FORBIDDEN, "Account disabled")),
+            Ok(None) => Err((StatusCode::UNAUTHORIZED, "Invalid or expired session")),
+            Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "Auth check failed")),
+        }
     }
 }
 
