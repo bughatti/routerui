@@ -243,6 +243,21 @@ Environment=ROUTERUI_PORT=3080
 Restart=always
 RestartSec=5
 
+# Blast-radius hardening. RouterUI must run privileged (it manages the
+# firewall, DHCP, interfaces, and installs packages), but these limit what a
+# compromised process can reach without breaking any of that. Strict
+# filesystem/capability confinement is deliberately NOT used because it would
+# break add-on installs (apt / vendor installers write across the system).
+ProtectHome=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictNamespaces=~user
+
 [Install]
 WantedBy=multi-user.target
 EOF
