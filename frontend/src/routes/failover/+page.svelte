@@ -33,18 +33,18 @@
   onMount(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); });
 </script>
 
-<div class="max-w-2xl">
-  <div class="mb-6">
+<div class="space-y-6">
+  <div>
     <h2 class="text-2xl font-bold">Dual-WAN Failover</h2>
     <p class="text-gray-400 text-sm">If your primary internet uplink goes down, the router automatically switches to a backup uplink (e.g. an LTE/USB modem) and fails back when the primary returns. Requires two WAN interfaces.</p>
   </div>
 
-  {#if error}<div class="card border-red-600 mb-4 text-red-300 text-sm">{error}</div>{/if}
+  {#if error}<div class="card border border-red-600 text-red-300 text-sm">{error}</div>{/if}
 
   {#if loading}
     <p class="text-gray-400">Loading…</p>
   {:else}
-    <div class="card mb-4">
+    <div class="card">
       <div class="grid grid-cols-3 gap-4 text-center">
         <div>
           <p class="text-gray-400 text-xs">Active uplink</p>
@@ -66,19 +66,19 @@
         <input type="checkbox" bind:checked={form.enabled} /> Enable failover
       </label>
       <div class="grid grid-cols-2 gap-3">
-        <label class="text-sm">Primary WAN
+        <label class="block text-sm text-gray-400 mb-1">Primary WAN
           <select bind:value={form.primary_iface} class="input w-full mt-1">
             <option value="">Select…</option>
             {#each interfaces as i}<option value={i.name}>{i.name}</option>{/each}
           </select>
         </label>
-        <label class="text-sm">Backup WAN
+        <label class="block text-sm text-gray-400 mb-1">Backup WAN
           <select bind:value={form.backup_iface} class="input w-full mt-1">
             <option value="">Select…</option>
             {#each interfaces as i}<option value={i.name}>{i.name}</option>{/each}
           </select>
         </label>
-        <label class="text-sm">Probe target (IP)
+        <label class="block text-sm text-gray-400 mb-1">Probe target (IP)
           <input type="text" bind:value={form.ping_target} class="input w-full mt-1" />
         </label>
       </div>

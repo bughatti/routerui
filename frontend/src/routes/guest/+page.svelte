@@ -30,18 +30,18 @@
   onMount(load);
 </script>
 
-<div class="max-w-2xl">
-  <div class="mb-6">
+<div class="space-y-6">
+  <div>
     <h2 class="text-2xl font-bold">Guest Network</h2>
     <p class="text-gray-400 text-sm">An isolated network for visitors. Guests reach the internet but not your main LAN, other networks, or each other.</p>
   </div>
 
-  {#if error}<div class="card border-red-600 mb-4 text-red-300 text-sm">{error}</div>{/if}
+  {#if error}<div class="card border border-red-600 text-red-300 text-sm">{error}</div>{/if}
 
   {#if loading}
     <p class="text-gray-400">Loading…</p>
   {:else}
-    <div class="card mb-4">
+    <div class="card">
       <div class="flex items-center justify-between">
         <div>
           <p class="font-semibold">Status: <span class={status.enabled ? "status-active" : "status-inactive"}>{status.enabled ? "Enabled" : "Disabled"}</span></p>
@@ -56,13 +56,13 @@
     </div>
 
     <div class="card">
-      <h3 class="font-semibold mb-3">Wi-Fi (optional)</h3>
+      <h3 class="text-lg font-semibold mb-4">Wi-Fi (optional)</h3>
       {#if status.has_wifi}
         <p class="text-gray-400 text-sm mb-3">Broadcast a separate guest SSID with client isolation. Leave blank for a wired-only guest network.</p>
-        <label class="text-sm block mb-3">Guest SSID
+        <label class="block text-sm text-gray-400 mb-1">Guest SSID
           <input type="text" bind:value={ssid} placeholder="MyNetwork-Guest" class="input w-full mt-1" />
         </label>
-        <label class="text-sm block mb-3">Passphrase {#if status.has_passphrase}<span class="text-gray-500">(leave blank to keep current)</span>{/if}
+        <label class="block text-sm text-gray-400 mb-1">Passphrase {#if status.has_passphrase}<span class="text-gray-500">(leave blank to keep current)</span>{/if}
           <input type="password" bind:value={passphrase} placeholder="8–63 characters" class="input w-full mt-1" />
         </label>
         <button class="btn btn-primary" onclick={() => save(status.enabled)} disabled={busy}>Save Wi-Fi settings</button>

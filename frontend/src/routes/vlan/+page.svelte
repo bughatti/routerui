@@ -52,30 +52,30 @@
   onMount(load);
 </script>
 
-<div class="max-w-4xl">
-  <div class="mb-6">
+<div class="space-y-6">
+  <div>
     <h2 class="text-2xl font-bold">Networks (VLANs)</h2>
     <p class="text-gray-400 text-sm">Segment your LAN into separate networks. Each VLAN gets its own subnet and DHCP; an <em>isolated</em> VLAN can reach the internet but not your main LAN or other VLANs.</p>
     {#if lanIface}<p class="text-gray-500 text-xs mt-1">Tagged on LAN interface: <code>{lanIface}</code> — your switch/AP must pass the VLAN tag to use it beyond the router.</p>{/if}
   </div>
 
-  {#if error}<div class="card border-red-600 mb-4 text-red-300 text-sm">{error}</div>{/if}
+  {#if error}<div class="card border border-red-600 text-red-300 text-sm">{error}</div>{/if}
 
   {#if loading}
     <p class="text-gray-400">Loading…</p>
   {:else}
-    <div class="card mb-6">
-      <h3 class="font-semibold mb-3">Configured networks</h3>
+    <div class="card">
+      <h3 class="text-lg font-semibold mb-4">Configured networks</h3>
       {#if vlans.length === 0}
         <p class="text-gray-500 text-sm">No VLANs yet. Add one below.</p>
       {:else}
         <table class="w-full text-sm">
-          <thead class="text-gray-400 text-left">
-            <tr><th class="py-1">VLAN</th><th>Name</th><th>Subnet</th><th>DHCP range</th><th>Isolated</th><th></th></tr>
+          <thead>
+            <tr class="text-left text-gray-400 border-b border-gray-700"><th class="pb-2">VLAN</th><th class="pb-2">Name</th><th class="pb-2">Subnet</th><th class="pb-2">DHCP range</th><th class="pb-2">Isolated</th><th class="pb-2"></th></tr>
           </thead>
           <tbody>
             {#each vlans as v}
-              <tr class="border-t border-gray-700">
+              <tr class="border-b border-gray-700/50">
                 <td class="py-2">{v.id}</td>
                 <td>{v.name}</td>
                 <td><code>{v.subnet}.0/24</code></td>
@@ -90,24 +90,24 @@
     </div>
 
     <div class="card">
-      <h3 class="font-semibold mb-3">Add a network</h3>
+      <h3 class="text-lg font-semibold mb-4">Add a network</h3>
       <div class="grid grid-cols-2 gap-3">
-        <label class="text-sm">VLAN ID (1–4094)
+        <label class="block text-sm text-gray-400 mb-1">VLAN ID (1–4094)
           <input type="number" min="1" max="4094" bind:value={form.id} class="input w-full mt-1" />
         </label>
-        <label class="text-sm">Name
+        <label class="block text-sm text-gray-400 mb-1">Name
           <input type="text" bind:value={form.name} placeholder="IoT" class="input w-full mt-1" />
         </label>
-        <label class="text-sm">Subnet (first 3 octets)
+        <label class="block text-sm text-gray-400 mb-1">Subnet (first 3 octets)
           <input type="text" bind:value={form.subnet} oninput={syncSubnet} placeholder="192.168.20" class="input w-full mt-1" />
         </label>
         <label class="text-sm flex items-center gap-2 mt-6">
           <input type="checkbox" bind:checked={form.isolated} /> Isolated (guest-style)
         </label>
-        <label class="text-sm">DHCP start
+        <label class="block text-sm text-gray-400 mb-1">DHCP start
           <input type="text" bind:value={form.dhcp_start} class="input w-full mt-1" />
         </label>
-        <label class="text-sm">DHCP end
+        <label class="block text-sm text-gray-400 mb-1">DHCP end
           <input type="text" bind:value={form.dhcp_end} class="input w-full mt-1" />
         </label>
       </div>

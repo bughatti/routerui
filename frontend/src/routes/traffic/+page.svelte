@@ -85,8 +85,8 @@
   onDestroy(() => clearInterval(timer));
 </script>
 
-<div class="max-w-5xl">
-  <div class="mb-6 flex items-start justify-between">
+<div class="space-y-6">
+  <div class="flex items-start justify-between">
     <div>
       <h2 class="text-2xl font-bold">Traffic Insight</h2>
       <p class="text-gray-400 text-sm">Per-device usage, live connections, real-time bandwidth, and top domains. Click a device to drill in.</p>
@@ -98,7 +98,7 @@
     <p class="text-gray-400">Loading…</p>
   {:else}
     <!-- Privacy / settings -->
-    <div class="card mb-4">
+    <div class="card">
       <div class="flex flex-wrap items-center gap-6">
         <label class="text-sm flex items-center gap-2">
           <input type="checkbox" bind:checked={settings.insights_enabled} onchange={saveSettings} />
@@ -117,17 +117,17 @@
       <div class="card text-gray-400">Traffic insight is turned off. Enable it above to see per-device traffic.</div>
     {:else}
       <!-- Client list -->
-      <div class="card mb-4">
+      <div class="card">
         <table class="w-full text-sm">
-          <thead class="text-gray-400 text-left">
-            <tr><th class="py-1">Device</th><th>IP</th><th class="text-right">↓ total</th><th class="text-right">↑ total</th><th class="text-right">↓ now</th><th class="text-right">↑ now</th></tr>
+          <thead>
+            <tr class="text-left text-gray-400 border-b border-gray-700"><th class="pb-2">Device</th><th class="pb-2">IP</th><th class="pb-2 text-right">↓ total</th><th class="pb-2 text-right">↑ total</th><th class="pb-2 text-right">↓ now</th><th class="pb-2 text-right">↑ now</th></tr>
           </thead>
           <tbody>
             {#if clients.length === 0}
               <tr><td colspan="6" class="text-gray-500 py-3">No active devices with leases yet.</td></tr>
             {/if}
             {#each clients as c}
-              <tr class="border-t border-gray-700 hover:bg-gray-700/40 cursor-pointer" onclick={() => selectClient(c.ip)}>
+              <tr class="border-b border-gray-700/50 hover:bg-gray-700/40 cursor-pointer" onclick={() => selectClient(c.ip)}>
                 <td class="py-2">{c.hostname || "(unknown)"}<span class="text-gray-600 text-xs ml-2">{c.mac}</span></td>
                 <td class="font-mono text-gray-400">{c.ip}</td>
                 <td class="text-right">{fmtBytes(c.rx_bytes)}</td>
@@ -177,7 +177,7 @@
 
       <!-- L5 DPI -->
       <div class="card">
-        <h3 class="font-semibold mb-2">Deep traffic analysis (DPI)</h3>
+        <h3 class="text-lg font-semibold mb-4">Deep traffic analysis (DPI)</h3>
         {#if dpi.installed && dpi.running}
           <p class="text-gray-400 text-sm mb-2">Per-application classification (Netflix / gaming / BitTorrent…), top talkers and historical analytics are provided by ntopng.</p>
           <a class="btn btn-primary inline-block" href={`http://${routerHost}:3001`} target="_blank" rel="noopener">Open ntopng dashboard →</a>
