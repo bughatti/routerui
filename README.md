@@ -116,4 +116,7 @@ enabled while insight is on. Use it responsibly on networks you administer.
 
 ## License
 
-See the repository for license details.
+Licensed under the **GNU Affero General Public License v3.0** — see
+[LICENSE](LICENSE). In short: you're free to use, modify, and self-host it, but
+if you distribute it or run a modified version as a network service, you must
+make your source available under the same license.
