@@ -282,7 +282,7 @@
           <label class="block text-sm text-gray-400 mb-1">Upload</label>
           <input type="number" min="0" max="10000" bind:value={newClient.up_mbps} class="input w-full" />
         </div>
-        <button onclick={addClient} class="btn-secondary">Add</button>
+        <button onclick={addClient} class="btn btn-secondary">Add</button>
       </div>
     </div>
 
@@ -308,10 +308,10 @@
 
     <!-- Actions -->
     <div class="flex gap-3">
-      <button onclick={save} disabled={saving} class="btn-primary">
+      <button onclick={save} disabled={saving} class="btn btn-primary">
         {saving ? "Applying..." : "Save & Apply"}
       </button>
-      <button onclick={clearAll} disabled={saving} class="btn-secondary">
+      <button onclick={clearAll} disabled={saving} class="btn btn-secondary">
         Clear All Shaping
       </button>
     </div>
@@ -319,52 +319,6 @@
 </div>
 
 <style>
-  .input {
-    background: #374151;
-    border: 1px solid #4b5563;
-    border-radius: 0.375rem;
-    padding: 0.5rem 0.75rem;
-    color: #f3f4f6;
-  }
-
-  .input:focus {
-    outline: none;
-    border-color: #60a5fa;
-  }
-
-  .btn-primary {
-    background: #3b82f6;
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
-    font-weight: 500;
-  }
-
-  .btn-primary:hover {
-    background: #2563eb;
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .btn-secondary {
-    background: #4b5563;
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
-    font-weight: 500;
-  }
-
-  .btn-secondary:hover {
-    background: #6b7280;
-  }
-
-  .btn-secondary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 
   .toggle {
     position: relative;

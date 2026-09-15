@@ -82,11 +82,8 @@
           <input type="text" bind:value={form.ping_target} class="input w-full mt-1" />
         </label>
       </div>
-      <button class="btn-primary mt-4" onclick={save} disabled={busy}>Save</button>
+      <button class="btn btn-primary mt-4" onclick={save} disabled={busy}>Save</button>
     </div>
   {/if}
 </div>
 
-<style>
-  .input { @apply bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-100; }
-</style>

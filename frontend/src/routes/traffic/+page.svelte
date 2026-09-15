@@ -91,7 +91,7 @@
       <h2 class="text-2xl font-bold">Traffic Insight</h2>
       <p class="text-gray-400 text-sm">Per-device usage, live connections, real-time bandwidth, and top domains. Click a device to drill in.</p>
     </div>
-    <button class="btn-danger text-sm" onclick={resetCounters}>Reset counters</button>
+    <button class="btn btn-danger text-sm" onclick={resetCounters}>Reset counters</button>
   </div>
 
   {#if loading}
@@ -107,7 +107,7 @@
         <label class="text-sm flex items-center gap-2">
           Domain-history retention (hours)
           <input type="number" min="1" max="720" bind:value={settings.retention_hours} class="input w-24" />
-          <button class="btn-primary text-sm" onclick={saveSettings}>Save</button>
+          <button class="btn btn-primary text-sm" onclick={saveSettings}>Save</button>
         </label>
         <span class="text-xs text-gray-500">You (admin) can see every domain each device resolves. Retention bounds how long that history is kept.</span>
       </div>
@@ -180,7 +180,7 @@
         <h3 class="font-semibold mb-2">Deep traffic analysis (DPI)</h3>
         {#if dpi.installed && dpi.running}
           <p class="text-gray-400 text-sm mb-2">Per-application classification (Netflix / gaming / BitTorrent…), top talkers and historical analytics are provided by ntopng.</p>
-          <a class="btn-primary inline-block" href={`http://${routerHost}:3001`} target="_blank" rel="noopener">Open ntopng dashboard →</a>
+          <a class="btn btn-primary inline-block" href={`http://${routerHost}:3001`} target="_blank" rel="noopener">Open ntopng dashboard →</a>
         {:else}
           <p class="text-gray-400 text-sm">Application-level DPI is an optional add-on (ntopng). It's heavier than the per-device view above and monitors the LAN interface. Install it from the <a href="/addons" class="text-blue-400">Add-ons</a> page.</p>
         {/if}
@@ -189,6 +189,3 @@
   {/if}
 </div>
 
-<style>
-  .input { @apply bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-100; }
-</style>

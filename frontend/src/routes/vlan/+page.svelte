@@ -81,7 +81,7 @@
                 <td><code>{v.subnet}.0/24</code></td>
                 <td class="text-gray-400">{v.dhcp_start}–{v.dhcp_end}</td>
                 <td>{v.isolated ? "🔒 yes" : "no"}</td>
-                <td class="text-right"><button class="btn-danger text-xs px-2 py-1" onclick={() => removeVlan(v.id)} disabled={busy}>Delete</button></td>
+                <td class="text-right"><button class="btn btn-danger text-xs px-2 py-1" onclick={() => removeVlan(v.id)} disabled={busy}>Delete</button></td>
               </tr>
             {/each}
           </tbody>
@@ -111,11 +111,8 @@
           <input type="text" bind:value={form.dhcp_end} class="input w-full mt-1" />
         </label>
       </div>
-      <button class="btn-primary mt-4" onclick={addVlan} disabled={busy || !form.name}>Add network</button>
+      <button class="btn btn-primary mt-4" onclick={addVlan} disabled={busy || !form.name}>Add network</button>
     </div>
   {/if}
 </div>
 
-<style>
-  .input { @apply bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-100; }
-</style>

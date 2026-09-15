@@ -140,15 +140,3 @@
   {/if}
 </div>
 
-<style>
-  .btn-secondary {
-    background-color: #374151;
-    color: #f3f4f6;
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
-  }
-  .btn-secondary:hover {
-    background-color: #4b5563;
-  }
-</style>

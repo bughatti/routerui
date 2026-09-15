@@ -48,9 +48,9 @@
           {#if status.subnet}<p class="text-gray-500 text-xs mt-1">Subnet <code>{status.subnet}</code>, isolated</p>{/if}
         </div>
         {#if status.enabled}
-          <button class="btn-danger" onclick={() => save(false)} disabled={busy}>Turn off</button>
+          <button class="btn btn-danger" onclick={() => save(false)} disabled={busy}>Turn off</button>
         {:else}
-          <button class="btn-primary" onclick={() => save(true)} disabled={busy}>Turn on</button>
+          <button class="btn btn-primary" onclick={() => save(true)} disabled={busy}>Turn on</button>
         {/if}
       </div>
     </div>
@@ -65,7 +65,7 @@
         <label class="text-sm block mb-3">Passphrase {#if status.has_passphrase}<span class="text-gray-500">(leave blank to keep current)</span>{/if}
           <input type="password" bind:value={passphrase} placeholder="8–63 characters" class="input w-full mt-1" />
         </label>
-        <button class="btn-primary" onclick={() => save(status.enabled)} disabled={busy}>Save Wi-Fi settings</button>
+        <button class="btn btn-primary" onclick={() => save(status.enabled)} disabled={busy}>Save Wi-Fi settings</button>
       {:else}
         <p class="text-gray-500 text-sm">No Wi-Fi radio detected on this router, so the guest network is wired/VLAN only. Put guest ports on VLAN 90 to use it.</p>
       {/if}
@@ -73,6 +73,3 @@
   {/if}
 </div>
 
-<style>
-  .input { @apply bg-gray-900 border border-gray-700 rounded px-3 py-2 text-gray-100; }
-</style>

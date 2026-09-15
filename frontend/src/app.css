@@ -15,11 +15,23 @@
   .btn {
     @apply px-4 py-2 rounded-lg font-medium transition-colors;
   }
+  .btn:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 text-white;
   }
   .btn-danger {
     @apply bg-red-600 hover:bg-red-700 text-white;
+  }
+  .btn-secondary {
+    @apply bg-gray-700 hover:bg-gray-600 text-gray-100;
+  }
+  .input {
+    @apply bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-100;
+  }
+  .input:focus {
+    @apply outline-none border-blue-500 ring-1 ring-blue-500;
   }
   .status-active {
     @apply text-green-400;
